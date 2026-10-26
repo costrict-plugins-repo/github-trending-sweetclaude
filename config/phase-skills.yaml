@@ -1,0 +1,120 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SweetClaude Phase-Skill Mapping
+# Six domain buckets: strategy, product, design, code, operations, deploy.
+# The find-skill and next-steps skills classify work into a bucket
+# and surface appropriate skills.
+schema_version: 1
+
+always_loaded:
+  skills:
+    - sweetclaude
+    - sweetclaude:find-skill
+    - sweetclaude:hibernate
+    - sweetclaude:product-milestones
+    - sweetclaude:epics
+    - sweetclaude:user-personas
+    - sweetclaude:recap
+    - sweetclaude:usage
+    - hibernate-project
+  rules:
+    - sweetclaude/interaction-model.md
+    - sweetclaude/phase-gates.md
+    - sweetclaude/tdd-levels.md
+
+strategy:
+  skills:
+    - sweetclaude:strategy/academic-research
+    - sweetclaude:strategy/meeting-prep
+    - caucus
+    - reasoning-frameworks
+  agents: []
+  hooks: []
+
+product:
+  skills:
+    - sweetclaude:product/market-messaging
+    - sweetclaude:product/discovery
+    - sweetclaude:product/research
+    - sweetclaude:product/competition
+    - sweetclaude:product/user-focus-group
+    - sweetclaude:product/positioning-statement
+    - sweetclaude:product/brief
+    - sweetclaude:product/prd
+    - sweetclaude:product/user-stories
+    - sweetclaude:product/user-tdd-tests
+    - sweetclaude:product/manage-scope
+    - sweetclaude:product/backlog
+    - sweetclaude:product/sprint-plan
+    - sweetclaude:concept-framing
+    - sweetclaude:course-correction
+    - sweetclaude:signal-aggregation
+    - sweetclaude:release-planning
+    - sweetclaude:security-planning
+    - reconciling-documents
+  agents: []
+  hooks: []
+
+design:
+  skills:
+    - sweetclaude:design/user-flows
+    - sweetclaude:design/wireframes
+    - sweetclaude:design/ux-review
+    - sweetclaude:design/architecture
+    - sweetclaude:design/tech-spec
+    - sweetclaude:design/ux
+    - sweetclaude:design/solutioning-gate
+    - sweetclaude:design/change-impact-analysis
+    - sweetclaude:design/update-docs
+    - sweetclaude:design/data-model
+    - sweetclaude:design/api-design
+    - sweetclaude:design/manage-decisions
+    - caucus
+    - reasoning-frameworks
+  agents: []
+  hooks: []
+
+code:
+  skills:
+    - sweetclaude:code-tdd
+    - sweetclaude:code-issue
+    - sweetclaude:code-debt
+    - sweetclaude:code-testing
+    - sweetclaude:code-review
+    - sweetclaude:hotfix
+    - sweetclaude:security-patch
+    - sweetclaude:performance-optimization
+    - sweetclaude:external-integration
+    - sweetclaude:technology-migration
+    - sweetclaude:api-deprecation
+    - sweetclaude:data-migration
+    - sweetclaude:dependency-upgrade
+    - sweetclaude:infrastructure-change
+    - sweetclaude:feature-flag-management
+    - sweetclaude:rollback-revert
+    - sweetclaude:onboarding-flow-design
+  agents:
+    - sweetclaude:test-writer
+    - sweetclaude:implementer
+    - sweetclaude:qa-caucus-service
+    - sweetclaude:qa-caucus-component
+    - sweetclaude:qa-caucus-integration
+  hooks:
+    - test-guardian
+    - auto-test-runner
+    - git-checkpoint
+
+operations:
+  skills:
+    - sweetclaude:something-broke
+    - sweetclaude:postmortem
+    - sweetclaude:break-glass-notes
+    - sweetclaude:sla-error-budget-review
+    - sweetclaude:monitoring-alerting
+    - sweetclaude:onboarding-playbook
+  agents: []
+  hooks: []
+
+deploy:
+  skills: []
+  agents: []
+  hooks: []

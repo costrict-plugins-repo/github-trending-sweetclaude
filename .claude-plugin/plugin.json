@@ -1,0 +1,22 @@
+{
+  "name": "sweetclaude",
+  "description": "A full lifecycle software development partner for Claude Code - from concept to completion.",
+  "version": "5.1.2",
+  "author": {
+    "name": "Carson Sweet",
+    "email": "cs@carsonsweet.com"
+  },
+  "homepage": "https://github.com/carson-sweet/sweetclaude",
+  "repository": "https://github.com/carson-sweet/sweetclaude",
+  "license": "AGPL-3.0-or-later",
+  "keywords": [
+    "tdd",
+    "workflow",
+    "phase-gates",
+    "product-management",
+    "code-review",
+    "multi-agent",
+    "discipline",
+    "quality"
+  ]
+}
