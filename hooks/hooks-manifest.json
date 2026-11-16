@@ -1,0 +1,236 @@
+{
+  "schema_version": 2,
+  "description": "Declares every hook script and how it is registered. scope: plugin-native = declared in hooks/hooks.json and auto-loaded by Claude Code's plugin system (the variable ${CLAUDE_PLUGIN_ROOT} resolves there); scope: project = registered in .claude/settings.local.json via sweetclaude:on; scope: global = registered in ~/.claude/settings.json (rare \u2014 only for hooks that cannot be plugin-native). command_path: the ${CLAUDE_PLUGIN_ROOT}-rooted path used when registering this hook.",
+  "hooks": [
+    {
+      "file": "session-preflight.sh",
+      "event": "SessionStart",
+      "matcher": "startup",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Loads session state, validates hook registrations, generates session-state.yaml",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/session-preflight.sh"
+    },
+    {
+      "file": "drift-gate.sh",
+      "event": "SessionStart",
+      "matcher": "startup",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Detects artifact-format drift at session start; writes pending-drift-decision.yaml and emits AskUserQuestion instruction if drift found",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/drift-gate.sh"
+    },
+    {
+      "file": "master-preflight.sh",
+      "event": "PreToolUse",
+      "matcher": "Skill",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Blocks sweetclaude:* skill invocations until bootstrap has run this session and any pending drift decision is resolved",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/master-preflight.sh"
+    },
+    {
+      "file": "preflight-guard.sh",
+      "event": "PreToolUse",
+      "matcher": ".*",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Blocks tool calls when SweetClaude is disabled or phase.yaml is missing",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/preflight-guard.sh"
+    },
+    {
+      "file": "test-guardian.sh",
+      "event": "PreToolUse",
+      "matcher": "Write|Edit|NotebookEdit|Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Prevents edits to test files, by Write, Edit, NotebookEdit or Bash, during TDD implementation phase",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/test-guardian.sh"
+    },
+    {
+      "file": "tdd-prewrite-guardian.sh",
+      "event": "PreToolUse",
+      "matcher": "Write|Edit",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Warns when writing implementation code before tests exist",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/tdd-prewrite-guardian.sh"
+    },
+    {
+      "file": "artifact-guardian.sh",
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Blocks writes to artifact paths that bypass the sc-artifact adapter",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/artifact-guardian.sh"
+    },
+    {
+      "file": "tdd-commit-gate.sh",
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "TDD commit gate: denies a git commit adding implementation source files on a story branch while a TDD cycle is active in implement and no earlier commit on that branch has subject 'test: RED'",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/tdd-commit-gate.sh"
+    },
+    {
+      "file": "wip-limit.sh",
+      "event": "PreToolUse",
+      "matcher": "Write|Edit|Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Denies activating an issue in Kanban mode when the WIP limit is reached, in any phase",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/wip-limit.sh"
+    },
+    {
+      "file": "auto-test-runner.sh",
+      "event": "PostToolUse",
+      "matcher": "Write|Edit",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Runs the test suite after every source file edit during TDD IMPLEMENT phase",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/auto-test-runner.sh"
+    },
+    {
+      "file": "state-regenerator.sh",
+      "event": "PostToolUse",
+      "matcher": "Write|Edit",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Regenerates session-state.yaml when phase.yaml or skills.yaml changes",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/state-regenerator.sh"
+    },
+    {
+      "file": "skill-tracker.sh",
+      "event": "PostToolUse",
+      "matcher": "Skill",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Logs every skill invocation to .sweetclaude/state/skill-usage-log.md",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/skill-tracker.sh"
+    },
+    {
+      "file": "plan-tracker.sh",
+      "event": "PostToolUse",
+      "matcher": "ExitPlanMode",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Records the active plan file path and sprint/milestone context to .sweetclaude/state/active-plan.txt when plan mode exits",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/plan-tracker.sh"
+    },
+    {
+      "file": "migration-decision-reminder.sh",
+      "event": "UserPromptSubmit",
+      "matcher": null,
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Reminds the user of a pending migration Accept/Rollback decision; hard-blocks at turn 10. Silent when no marker file is present.",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/migration-decision-reminder.sh"
+    },
+    {
+      "file": "legacy-command-redirect.sh",
+      "event": "UserPromptSubmit",
+      "matcher": null,
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Tells the user the 5.0 replacement for a removed /sweetclaude:<workflow> command and hands the request to its category. Silent for Tier 1 commands and ordinary prompts.",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/legacy-command-redirect.sh"
+    },
+    {
+      "file": "git-checkpoint.sh",
+      "event": null,
+      "matcher": null,
+      "required": false,
+      "purpose": "Utility called explicitly by skills (e.g. code-tdd) to commit a git checkpoint. NOT an event hook \u2014 takes a $MESSAGE argument.",
+      "command_path": null
+    },
+    {
+      "file": "phase-dwelling-guard.sh",
+      "event": "Stop",
+      "matcher": "",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Protocol guardian: blocks phase-advancing language in a response; does nothing unless guardian-enabled exists",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/phase-dwelling-guard.sh"
+    },
+    {
+      "file": "auto-reindex.sh",
+      "event": null,
+      "matcher": null,
+      "required": false,
+      "purpose": "RAG corpus indexing \u2014 registered only when document-corpus skill is active. Not a baseline hook.",
+      "command_path": null
+    },
+    {
+      "file": "generate-session-state.sh",
+      "event": null,
+      "matcher": null,
+      "required": false,
+      "purpose": "Called by session-preflight.sh to produce session-state.yaml. Not a standalone event hook.",
+      "command_path": null
+    },
+    {
+      "file": "sc-artifact.sh",
+      "event": null,
+      "matcher": null,
+      "required": false,
+      "purpose": "Shell library (source'd by skills). Not an event hook.",
+      "command_path": null
+    },
+    {
+      "file": "large-story-gate.sh",
+      "event": "PreToolUse",
+      "matcher": "Write|Edit|NotebookEdit|Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Track C: denies project writes outside controller-entered IMPLEMENT and all direct writes to controller-owned state/reports while a large-story workflow is active",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/large-story-gate.sh"
+    },
+    {
+      "file": "large-story-evidence.sh",
+      "event": "PostToolUse",
+      "matcher": "Write|Edit|NotebookEdit|Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Track C: appends harness-observed implementation evidence (evidence.jsonl) during large-story IMPLEMENT; VERIFY fails closed without it",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/large-story-evidence.sh"
+    },
+    {
+      "file": "large-story-stop-guard.sh",
+      "event": "Stop",
+      "matcher": "",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Track C: blocks session end once while a large-story workflow is non-terminal, forcing controller-rendered status into the conversation",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/large-story-stop-guard.sh"
+    },
+    {
+      "file": "small-story-gate.sh",
+      "event": "PreToolUse",
+      "matcher": "Write|Edit|NotebookEdit|Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Denies project writes outside controller-entered IMPLEMENT and all direct writes to controller-owned state/reports while a small-story workflow is active",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/small-story-gate.sh"
+    },
+    {
+      "file": "small-story-evidence.sh",
+      "event": "PostToolUse",
+      "matcher": "Write|Edit|NotebookEdit|Bash",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Appends harness-observed implementation evidence (evidence.jsonl) during small-story IMPLEMENT; VERIFY fails closed without it",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/small-story-evidence.sh"
+    },
+    {
+      "file": "small-story-stop-guard.sh",
+      "event": "Stop",
+      "matcher": "",
+      "required": true,
+      "scope": "plugin-native",
+      "purpose": "Blocks session end once while a small-story workflow is non-terminal, forcing controller-rendered status into the conversation",
+      "command_path": "${CLAUDE_PLUGIN_ROOT}/hooks/small-story-stop-guard.sh"
+    }
+  ]
+}

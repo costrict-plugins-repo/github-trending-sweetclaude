@@ -1,0 +1,4495 @@
+schema_version: 1
+channels:
+  stable:
+    branch: main
+    major_version: 5
+    expected_marketplace: sweetclaude-stable
+    prerelease_required: false
+    prerelease_allowed: false
+  beta:
+    branch: beta-4.x
+    major_version: 4
+    expected_marketplace: sweetclaude-beta
+    prerelease_required: true
+    prerelease_allowed: true
+    minimum_safe_version: 4.1.9-beta
+    retired: true
+    retirement_target_channel: stable
+  legacy:
+    branch: stable-3.x
+    major_version: 3
+    expected_marketplace: sweetclaude-legacy
+    prerelease_required: false
+    prerelease_allowed: false
+capabilities:
+  recover.stabilize_without_migration:
+    title: Stabilize recoverable legacy layout without taxonomy migration
+    delegate_skill: sweetclaude:recover
+    command_entrypoint:
+      slash_command: /sweetclaude:configure recover
+      script: scripts/recovery/recover_project.py
+      module: recovery.recover_project
+    supports_project_shapes:
+    - recovery_required
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - project guard status is run-recover
+    - recovery plan exists before execute
+    snapshot_scope_hints:
+    - .sweetclaude/
+    - docs/product/
+    postconditions:
+    - id: recovery-postconditions
+      check: recovery verifier reports stabilized state
+    rollback_support:
+      supported: true
+      command: python3 scripts/recovery/recover_project.py rollback --project-dir <project>
+      limitations: []
+    unsupported_states:
+    - condition: manual_escalation
+      behavior: escalate
+    - condition: missing_product_base
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.1.0-beta
+      deprecated_in: null
+    safety_contract:
+    - diagnose
+    - plan
+    - snapshot
+    - verify-snapshot
+    - approve
+    - execute
+    - record-progress
+    - resume
+    - verify-postconditions
+    - rollback
+    verification_commands:
+    - python3 scripts/recovery/recover_project.py diagnose --project-dir <project>
+    - python3 scripts/recovery/recover_project.py plan --project-dir <project>
+  migrate.flat_bl_to_issue:
+    title: Migrate flat BL-NNN backlog to ISSUE taxonomy
+    delegate_skill: sweetclaude:migrate
+    executable: scripts/migrate/migrate-v3-to-v4.py
+    command_entrypoint:
+      slash_command: /sweetclaude:configure migrate
+      script: scripts/migrate/migrate-v3-to-v4.py
+      module: null
+    supports_project_shapes:
+    - flat_bl_backlog
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    preflight_required: true
+    required_preconditions:
+    - project shape is flat_bl_backlog
+    - migration preflight passes
+    - user approval is bound to current plan
+    snapshot_scope_hints:
+    - .sweetclaude/product/backlog/
+    - .sweetclaude/state/
+    postconditions:
+    - id: issue-taxonomy-created
+      check: migrated ISSUE files and migration map exist
+    - id: migration-integrity
+      check: execution manifest contains source and created file integrity
+    rollback_support:
+      supported: true
+      command: python3 scripts/migrations/run_rollback.py --project-dir <project>
+      limitations: []
+    unsupported_states:
+    - condition: typed_legacy_backlog
+      behavior: block
+    - condition: recovery_required
+      behavior: diagnose_only
+    - condition: manual_escalation
+      behavior: escalate
+    version_metadata:
+      introduced_in: 4.0.0-beta
+      deprecated_in: null
+    safety_contract:
+    - diagnose
+    - preflight
+    - plan
+    - snapshot
+    - approve
+    - execute
+    - verify-postconditions
+    - rollback
+    verification_commands:
+    - python3 scripts/migrate/migrate-v3-to-v4.py preflight --project-dir <project>
+  migrate.typed_legacy_backlog:
+    title: Typed legacy backlog migration
+    supported: true
+    delegate_skill: sweetclaude:migrate
+    command_entrypoint:
+      slash_command: /sweetclaude:configure migrate
+      script: scripts/migrate/migrate_taxonomy.py
+      module: migrate.migrate_taxonomy
+    supports_project_shapes:
+    - typed_legacy_backlog
+    - accepted_legacy_taxonomy
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    rollback_support:
+      supported: true
+      command: python3 scripts/migrate/migrate_taxonomy.py --rollback --project-dir <project>
+      limitations: []
+    required_preconditions:
+    - project shape is typed_legacy_backlog or accepted_legacy_taxonomy
+    - no real duplicate ids present
+    snapshot_scope_hints:
+    - docs/product/
+    - .sweetclaude/product/
+    postconditions:
+    - id: old-prefix-files-removed
+      check: no old-prefix files remain on disk
+    version_metadata:
+      introduced_in: 4.3.0-beta
+      deprecated_in: null
+    safety_contract:
+    - diagnose
+    - dry-run
+    - snapshot
+    - approve
+    - execute
+    - verify-postconditions
+    - rollback
+    verification_commands:
+    - python3 scripts/migrate/migrate_taxonomy.py --dry-run --project-dir <project>
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+  recover.graduate_from_compatibility:
+    title: Graduate from compatibility mode
+    supported: true
+    delegate_skill: sweetclaude:recover
+    command_entrypoint:
+      slash_command: /sweetclaude:configure doctor
+      script: scripts/recovery/recover_project.py
+      module: recovery.recover_project
+    supports_project_shapes:
+    - accepted_legacy_taxonomy
+    - typed_legacy_backlog
+    - graduation_candidate
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - project is in compatibility mode or accepted legacy taxonomy
+    - graduation-check passes (v4-compliant)
+    snapshot_scope_hints:
+    - .sweetclaude/state/sweetclaude.yaml
+    postconditions:
+    - id: graduation-state-written
+      check: recovery.taxonomy.status is graduated and framework.migration_status is complete
+    rollback_support:
+      supported: true
+      command: python3 scripts/recovery/recover_project.py rollback-graduation --project-dir <project>
+      limitations: []
+    unsupported_states:
+    - condition: old_prefix_files_remain
+      behavior: block
+    - condition: duplicate_ids
+      behavior: block
+    - condition: frontmatter_parse_errors
+      behavior: block
+    version_metadata:
+      introduced_in: 4.2.6-beta
+      deprecated_in: null
+    safety_contract:
+    - diagnose
+    - validate
+    - snapshot
+    - approve
+    - execute
+    - verify-postconditions
+    - rollback
+    verification_commands:
+    - python3 scripts/recovery/recover_project.py graduation-check --project-dir <project>
+  doctor.compatibility_mode:
+    title: Continue in compatibility mode
+    supports_project_shapes:
+    - accepted_legacy_taxonomy
+    mutates_project: false
+    requires_approval: false
+    delegate_skill: null
+    command_entrypoint:
+      slash_command: null
+      script: null
+      module: null
+    mutation_class: read_only
+    required_preconditions: []
+    postconditions:
+    - id: outcome-reported
+      check: continue in compatibility mode
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    verification_commands:
+    - python3 scripts/doctor.py scan --project-dir <project>
+    verification_tier: tier-2-executable
+  doctor.fix_graduation_blockers:
+    title: Fix graduation blockers
+    supported: true
+    delegate_skill: sweetclaude:doctor
+    command_entrypoint:
+      slash_command: /sweetclaude:configure doctor
+      script: scripts/recovery/recover_project.py
+      module: recovery.recover_project
+    supports_project_shapes:
+    - graduation_blocked
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - project is in compatibility mode or accepted legacy taxonomy
+    - graduation-check reports validation-failures with resolvable blockers
+    snapshot_scope_hints:
+    - product work-item files named in each blocker resolution
+    postconditions:
+    - id: graduation-unblocked
+      check: graduation-check reports graduation_allowed true
+    rollback_support:
+      supported: true
+      command: python3 scripts/doctor.py restore --project-dir <project> --archive-dir <archive>
+      limitations: []
+    version_metadata:
+      introduced_in: 4.2.8-beta
+      deprecated_in: null
+    safety_contract:
+    - diagnose
+    - validate
+    - snapshot
+    - approve
+    - execute
+    - verify-postconditions
+    - rollback
+    verification_commands:
+    - python3 scripts/recovery/recover_project.py graduation-check --project-dir <project>
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+  doctor.manual_review:
+    title: Manual maintenance review
+    supports_project_shapes:
+    - manual_escalation
+    - missing_product_base
+    mutates_project: false
+    requires_approval: false
+    delegate_skill: null
+    command_entrypoint:
+      slash_command: null
+      script: null
+      module: null
+    mutation_class: read_only
+    required_preconditions: []
+    postconditions:
+    - id: outcome-reported
+      check: route a project the guard cannot classify to manual review
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    verification_commands:
+    - python3 scripts/doctor.py scan --project-dir <project>
+    verification_tier: tier-2-executable
+  update.framework_sync:
+    title: Framework/plugin update without project artifact migration
+    supports_project_shapes:
+    - current_layout
+    - accepted_legacy_taxonomy
+    - flat_bl_backlog
+    - recovery_required
+    - manual_escalation
+    - missing_product_base
+    mutates_project: false
+    mutates_global_config: true
+    requires_approval: true
+    delegate_skill: null
+    command_entrypoint:
+      slash_command: null
+      script: null
+      module: null
+    mutation_class: read_only
+    required_preconditions: []
+    postconditions:
+    - id: outcome-reported
+      check: sync the installed framework to the plugin version
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    verification_commands:
+    - python3 -m pytest tests/test_update_orchestrator.py -q
+    verification_tier: tier-2-executable
+  doctor.scan:
+    title: Read-only diagnostic scan across all check categories
+    delegate_skill: sweetclaude:doctor
+    command_entrypoint:
+      slash_command: /sweetclaude:configure doctor
+      script: scripts/doctor.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    - graduation_candidate
+    - graduation_blocked
+    - accepted_legacy_taxonomy
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude.yaml exists
+    postconditions:
+    - id: scan-emits-findings
+      check: scan returns a findings payload without writing to the project
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 scan writes nothing"
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 scripts/doctor.py scan --project-dir <project>
+  doctor.auto_fix:
+    title: Apply safe automatic repairs through the archived, reversible pipeline
+    delegate_skill: sweetclaude:doctor
+    command_entrypoint:
+      slash_command: /sweetclaude:configure doctor
+      script: scripts/doctor.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    - graduation_blocked
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - scan has run
+    - archive created before any write
+    snapshot_scope_hints:
+    - .sweetclaude/
+    postconditions:
+    - id: post-fix-rescan
+      check: post-fix-rescan reports the addressed findings resolved
+    rollback_support:
+      supported: true
+      command: python3 scripts/doctor.py restore --archive-dir <archive> --all
+      limitations: []
+    unsupported_states:
+    - condition: manual_review
+      behavior: escalate
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    safety_contract:
+    - scan
+    - plan
+    - archive
+    - approve
+    - execute
+    - post-fix-rescan
+    - restore
+    verification_commands:
+    - python3 scripts/doctor.py scan --project-dir <project>
+    - python3 scripts/doctor.py dry-run --project-dir <project>
+  doctor.restore:
+    title: Roll back the file changes a previous doctor run made
+    delegate_skill: sweetclaude:doctor
+    command_entrypoint:
+      slash_command: /sweetclaude:configure doctor
+      script: scripts/doctor.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - an archive directory from a prior doctor run exists
+    snapshot_scope_hints:
+    - .sweetclaude/
+    postconditions:
+    - id: restore-verified
+      check: restored files match the archived originals
+    rollback_support:
+      supported: true
+      command: re-run doctor auto-fix; each run is separately archived
+      limitations:
+      - restores only files a doctor run itself changed
+    unsupported_states:
+    - condition: archive_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 scripts/doctor.py prune-archives --project-dir <project>
+  init.dispatch:
+    title: Route a project to the right onboarding, migration, or repair path
+    delegate_skill: sweetclaude:init
+    command_entrypoint:
+      slash_command: /sweetclaude:configure init
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    - flat_bl_backlog
+    - typed_legacy_backlog
+    - recovery_required
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - plugin install is healthy (preflight.sh reports ok)
+    postconditions:
+    - id: init-creates-nothing
+      check: no files or state written by init itself (ISSUE-249)
+      verify:
+        kind: no_mutation
+        blocks: all
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 init writes nothing"
+      limitations: []
+    unsupported_states:
+    - condition: damaged_state
+      behavior: escalate
+    - condition: plugin_unhealthy
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.5.3
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    - python3 -m pytest tests/test_canonical_state_reads.py -q
+  setup.onboard_project:
+    title: "Onboard a project \u2014 detect shape, write sweetclaude.yaml, build v4 storage"
+    delegate_skill: sweetclaude:setup
+    command_entrypoint:
+      slash_command: null
+      script: scripts/sweetclaude-yaml-template.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - no existing sweetclaude.yaml
+    snapshot_scope_hints:
+    - .sweetclaude/
+    postconditions:
+    - id: state-written
+      check: sweetclaude.yaml parses and schema_version is known
+    - id: storage-built
+      check: v4 backlog tree and traceability maps exist
+    rollback_support:
+      supported: true
+      command: /sweetclaude:purge
+      limitations:
+      - purge removes all SweetClaude artifacts, not just this run's
+    unsupported_states:
+    - condition: already_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 scripts/doctor.py scan --project-dir <project>
+    - python3 -m pytest tests/test_migrate_to_sweetclaude_yaml.py -q
+  purge.remove_all:
+    title: Delete every SweetClaude artifact from a project
+    delegate_skill: sweetclaude:purge
+    command_entrypoint:
+      slash_command: /sweetclaude:configure purge
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    - accepted_legacy_taxonomy
+    - flat_bl_backlog
+    - typed_legacy_backlog
+    mutation_class: destructive
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - typed confirmation from the user
+    - backup branch recommended before execution
+    snapshot_scope_hints:
+    - .sweetclaude/
+    - docs/product/
+    postconditions:
+    - id: artifacts-removed
+      check: no .sweetclaude/ directory remains
+      verify:
+        kind: path_absent
+        block: rm -rf .sweetclaude/
+        paths:
+        - .sweetclaude
+    rollback_support:
+      supported: true
+      command: git checkout <backup-branch> -- .sweetclaude/
+      limitations:
+      - only if the recommended backup branch was created first
+      - gitignored content is not recoverable from git alone
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 scripts/doctor.py scan --project-dir <project>
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  update.check:
+    title: Channel-aware check for a newer framework version
+    delegate_skill: sweetclaude:update
+    command_entrypoint:
+      slash_command: /sweetclaude:configure update
+      script: scripts/update.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - network access to the release channel
+    postconditions:
+    - id: no-prerelease-to-stable
+      check: a stable install is never offered a prerelease (ISSUE-248)
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 check writes nothing to the project"
+      limitations: []
+    unsupported_states:
+    - condition: network_unavailable
+      behavior: diagnose_only
+    - condition: retired_channel
+      behavior: escalate
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_update_commands.py -q
+    - python3 -m pytest tests/test_beta_channel_retirement.py -q
+  work_item_artifacts.backfill:
+    title: Backfill per-work-item artifact directories with symlinked artifacts
+    delegate_skill: sweetclaude:work-item-artifacts
+    command_entrypoint:
+      slash_command: /sweetclaude:configure work-item-artifacts
+      script: scripts/backfill_work_item_artifacts.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - dry-run reviewed before execution
+    snapshot_scope_hints:
+    - .sweetclaude/work/
+    postconditions:
+    - id: non-destructive
+      check: no pre-existing file is replaced and no dangling symlink is left
+    rollback_support:
+      supported: true
+      command: rm -rf .sweetclaude/work/<ITEM-ID>
+      limitations: []
+    unsupported_states:
+    - condition: existing_work_dir
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.3.0
+      deprecated_in: null
+    verification_commands:
+    - python3 scripts/backfill_work_item_artifacts.py --project-dir <project> --dry-run
+    - python3 -m pytest tests/test_backfill_work_item_artifacts.py -q
+  product.brief:
+    title: Write a product brief
+    delegate_skill: sweetclaude:product-brief
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-brief
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.brief-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.prd:
+    title: Write a Product Requirements Document
+    delegate_skill: sweetclaude:product-prd
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-prd
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.prd-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.discovery:
+    title: Establish what is being built, for whom, and why
+    delegate_skill: sweetclaude:product-discovery
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-discovery
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.discovery-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.research:
+    title: Survey the commercial and open-source solution field
+    delegate_skill: sweetclaude:product-research
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-research
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.research-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.competition:
+    title: Competitive analysis at three depth levels
+    delegate_skill: sweetclaude:product-competition
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-competition
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.competition-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.milestones:
+    title: Manage roadmap milestones
+    delegate_skill: sweetclaude:product-milestones
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-milestones
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.milestones-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.milestone_planning:
+    title: Guided milestone planning workshop
+    delegate_skill: sweetclaude:product-milestone-planning
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-milestone-planning
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.milestone_planning-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: path_written
+        block: mkdir -p ${product_base}/milestones
+        substitutions:
+          ${product_base}: .sweetclaude/product
+        evidence: substituted
+        paths:
+        - .sweetclaude/product/milestones
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  product.roadmap:
+    title: Manage the product roadmap and priority stack
+    delegate_skill: sweetclaude:product-roadmap
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-roadmap
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.roadmap-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create release '{
+        category: product
+        artifact_glob: roadmap/releases/REL-*.md
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  product.roadmap_analysis:
+    title: RICE scoring and stack-rank analysis
+    delegate_skill: sweetclaude:product-roadmap-analysis
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-roadmap-analysis
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    postconditions:
+    - id: product.roadmap_analysis-read-only
+      check: a milestone's priority is written back to its own file. The skill
+        was declared read_only until ISSUE-299; sc_artifact_write rewrites the
+        milestone's frontmatter, which is the point of RICE scoring
+      verify:
+        kind: state_key_written
+        block: sc_artifact_write <MS-NNN>
+        substitutions:
+          <MS-NNN>: MS-001
+          <N>: '9'
+        evidence: substituted
+        seed_frontmatter:
+          .sweetclaude/product/roadmap/milestones/MS-001-seeded.md:
+            id: MS-001
+            type: milestone
+            title: Seeded milestone
+            status: planned
+            priority: 3
+        file: .sweetclaude/product/roadmap/milestones/MS-001-seeded.md
+        key_path:
+        - priority
+        value: 9
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 writes nothing"
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    required_preconditions:
+    - project is configured
+  product.user_stories:
+    title: Write user stories for a defined scope
+    delegate_skill: sweetclaude:product-user-stories
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-user-stories
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.user_stories-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.user_tdd_tests:
+    title: Transition user stories into Gherkin feature files
+    delegate_skill: sweetclaude:product-user-tdd-tests
+    command_entrypoint:
+      slash_command: /sweetclaude:build product-user-tdd-tests
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.user_tdd_tests-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.focus_group:
+    title: Synthetic panel research using persona archetypes
+    delegate_skill: sweetclaude:product-user-focus-group
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-user-focus-group
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.focus_group-artifact-written
+      check: the study directory is created under .sweetclaude/research/ — outside the
+        four configured artifact categories
+      verify:
+        kind: path_written
+        block: mkdir -p .sweetclaude/research/$study_id
+        paths:
+        - .sweetclaude/research
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  product.positioning:
+    title: Define product positioning
+    delegate_skill: sweetclaude:product-positioning-statement
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-positioning-statement
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.positioning-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.market_messaging:
+    title: Craft external messaging
+    delegate_skill: sweetclaude:product-market-messaging
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-market-messaging
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.market_messaging-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.terminology:
+    title: Maintain a shared domain glossary
+    delegate_skill: sweetclaude:product-terminology
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-terminology
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.terminology-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: path_written
+        block: os.makedirs(os.path.dirname(glossary_path), exist_ok=True)
+        substitutions:
+          $GLOSSARY: .sweetclaude/product/vocabulary/glossary.md
+          $PRODUCT_BASE: .sweetclaude/product
+        evidence: substituted
+        paths:
+        - .sweetclaude/product/vocabulary
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  product.manage_scope:
+    title: Track scope changes in and out
+    delegate_skill: sweetclaude:product-manage-scope
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-manage-scope
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.manage_scope-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.parking_lot:
+    title: Manage deferred work
+    delegate_skill: sweetclaude:product-parking-lot
+    command_entrypoint:
+      slash_command: /sweetclaude:plan product-parking-lot
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.parking_lot-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.sprint_plan:
+    title: Plan a sprint and produce a commitment
+    delegate_skill: sweetclaude:product-sprint-plan
+    command_entrypoint:
+      slash_command: /sweetclaude:build product-sprint-plan
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.sprint_plan-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  product.personas:
+    title: Define product users and their success criteria
+    delegate_skill: sweetclaude:user-personas
+    command_entrypoint:
+      slash_command: /sweetclaude:plan user-personas
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: product.personas-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.architecture:
+    title: Define system architecture
+    delegate_skill: sweetclaude:design-architecture
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-architecture
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.architecture-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.tech_spec:
+    title: Write the technical specification
+    delegate_skill: sweetclaude:design-tech-spec
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-tech-spec
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.tech_spec-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.data_model:
+    title: Design the data model
+    delegate_skill: sweetclaude:design-data-model
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-data-model
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.data_model-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.api_design:
+    title: Design API endpoints and contracts
+    delegate_skill: sweetclaude:design-api-design
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-api-design
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.api_design-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.ux:
+    title: Define the visual and interaction design
+    delegate_skill: sweetclaude:design-ux
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-ux
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.ux-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.ux_review:
+    title: Virtual UX review session
+    delegate_skill: sweetclaude:design-ux-review
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-ux-review
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.ux_review-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.user_flows:
+    title: Convert user stories into UX flows
+    delegate_skill: sweetclaude:design-user-flows
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-user-flows
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.user_flows-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.wireframes:
+    title: Generate HTML/CSS wireframes from user flows
+    delegate_skill: sweetclaude:design-wireframes
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-wireframes
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.wireframes-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.solutioning_gate:
+    title: Validate the proposed solution before implementation
+    delegate_skill: sweetclaude:design-solutioning-gate
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-solutioning-gate
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: true
+    postconditions:
+    - id: design.solutioning_gate-read-only
+      check: no project files are modified
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 writes nothing"
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    required_preconditions:
+    - project is configured
+  design.change_impact:
+    title: Ripple-effect analysis for changes to existing code
+    delegate_skill: sweetclaude:design-change-impact-analysis
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-change-impact-analysis
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: true
+    postconditions:
+    - id: design.change_impact-read-only
+      check: no project files are modified
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 writes nothing"
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    required_preconditions:
+    - project is configured
+  design.decisions:
+    title: Record and track design decisions
+    delegate_skill: sweetclaude:design-manage-decisions
+    command_entrypoint:
+      slash_command: /sweetclaude:design design-manage-decisions
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.decisions-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.mockup_sandbox:
+    title: Create and iterate on interactive UI mockups
+    delegate_skill: sweetclaude:mockup-sandbox
+    command_entrypoint:
+      slash_command: /sweetclaude:design mockup-sandbox
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.mockup_sandbox-artifact-written
+      check: the sandbox is created at artifacts/mockup-sandbox — a repo path, not a
+        configured artifact category
+      verify:
+        kind: path_written
+        block: mkdir -p artifacts/mockup-sandbox
+        paths:
+        - artifacts/mockup-sandbox
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  design.mockup_extract:
+    title: Pull a production component into the mockup sandbox
+    delegate_skill: sweetclaude:mockup-extract
+    command_entrypoint:
+      slash_command: /sweetclaude:design mockup-extract
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.mockup_extract-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  design.mockup_graduate:
+    title: Move an approved mockup into the application
+    delegate_skill: sweetclaude:mockup-graduate
+    command_entrypoint:
+      slash_command: /sweetclaude:design mockup-graduate
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: design.mockup_graduate-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  documents.update_docs:
+    title: Update documentation when behavior changes
+    delegate_skill: sweetclaude:documents-update-docs
+    command_entrypoint:
+      slash_command: /sweetclaude:utils documents-update-docs
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: documents.update_docs-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  documents.narrative_arc:
+    title: Build and query the strategic claim graph
+    delegate_skill: sweetclaude:documents-narrative-arc
+    command_entrypoint:
+      slash_command: /sweetclaude:plan documents-narrative-arc
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: documents.narrative_arc-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  documents.academic:
+    title: Academic paper development
+    delegate_skill: sweetclaude:documents-academic-research
+    command_entrypoint:
+      slash_command: /sweetclaude:plan documents-academic-research
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: documents.academic-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  documents.meeting_prep:
+    title: Prepare for a specific meeting
+    delegate_skill: sweetclaude:misc-meeting-prep
+    command_entrypoint:
+      slash_command: /sweetclaude:utils misc-meeting-prep
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: documents.meeting_prep-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  documents.session_export:
+    title: Export a session as a portable package
+    delegate_skill: sweetclaude:session-export
+    command_entrypoint:
+      slash_command: /sweetclaude:utils session-export
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: documents.session_export-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  documents.report_failure:
+    title: Write a structured failure report
+    delegate_skill: sweetclaude:report-failure
+    command_entrypoint:
+      slash_command: /sweetclaude:utils report-failure
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: documents.report_failure-artifact-written
+      check: the report directory is created at .sweetclaude/failure/ and kept local-only
+        via .gitignore — deliberately outside the configured categories
+      verify:
+        kind: path_written
+        block: mkdir -p "$DIR"
+        substitutions:
+          $DIR: .sweetclaude/failure
+        evidence: substituted
+        paths:
+        - .sweetclaude/failure
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  testing.plan:
+    title: Define and maintain a test strategy
+    delegate_skill: sweetclaude:testing-plan
+    command_entrypoint:
+      slash_command: /sweetclaude:build testing-plan
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: testing.plan-artifact-written
+      check: the plan directory is created at .sweetclaude/testing/plans/ — outside the
+        four configured artifact categories
+      verify:
+        kind: path_written
+        block: mkdir -p .sweetclaude/testing/plans/
+        paths:
+        - .sweetclaude/testing/plans
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  testing.security:
+    title: Structured security review
+    delegate_skill: sweetclaude:testing-security
+    command_entrypoint:
+      slash_command: /sweetclaude:build testing-security
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: testing.security-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create issue '{
+        category: product
+        artifact_glob: backlog/ISSUE-*.md
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  testing.performance:
+    title: Define load scenarios and performance baselines
+    delegate_skill: sweetclaude:testing-performance
+    command_entrypoint:
+      slash_command: /sweetclaude:build testing-performance
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: testing.performance-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create issue '{
+        category: product
+        artifact_glob: backlog/ISSUE-*.md
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  testing.accessibility:
+    title: WCAG 2.1 Level AA audit
+    delegate_skill: sweetclaude:testing-accessibility
+    command_entrypoint:
+      slash_command: /sweetclaude:build testing-accessibility
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: testing.accessibility-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create issue '{
+        category: product
+        artifact_glob: backlog/ISSUE-*.md
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  testing.compliance:
+    title: Compliance control testing and evidence collection
+    delegate_skill: sweetclaude:testing-compliance
+    command_entrypoint:
+      slash_command: /sweetclaude:build testing-compliance
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: testing.compliance-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create issue '{
+        category: product
+        artifact_glob: backlog/ISSUE-*.md
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  testing.session:
+    title: Run a manual QA session
+    delegate_skill: sweetclaude:testing-session
+    command_entrypoint:
+      slash_command: /sweetclaude:build testing-session
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: testing.session-artifact-written
+      check: the artifact exists at the configured base_path
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create issue '{
+        category: product
+        artifact_glob: backlog/ISSUE-*.md
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  corpus.consolidate:
+    title: Deduplicate and stage source files into the corpus inbox
+    delegate_skill: sweetclaude:corpus-consolidate
+    command_entrypoint:
+      slash_command: /sweetclaude:utils corpus-consolidate
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: corpus.consolidate-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  corpus.triage:
+    title: Classify inbox files for keep, reconcile, discard, or defer
+    delegate_skill: sweetclaude:corpus-triage
+    command_entrypoint:
+      slash_command: /sweetclaude:utils corpus-triage
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: corpus.triage-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  corpus.reconcile:
+    title: Produce approved canonical documents from staged files
+    delegate_skill: sweetclaude:corpus-reconcile
+    command_entrypoint:
+      slash_command: /sweetclaude:utils corpus-reconcile
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: corpus.reconcile-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  corpus.promote:
+    title: Finalize approved documents into the canonical corpus
+    delegate_skill: sweetclaude:corpus-promote
+    command_entrypoint:
+      slash_command: /sweetclaude:utils corpus-promote
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: corpus.promote-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  corpus.status:
+    title: Report corpus pipeline state
+    delegate_skill: sweetclaude:corpus-status
+    command_entrypoint:
+      slash_command: /sweetclaude:utils corpus-status
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: true
+    postconditions:
+    - id: corpus.status-read-only
+      check: no project files are modified
+      verify:
+        kind: no_mutation
+        blocks: all
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 writes nothing"
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    required_preconditions:
+    - project is configured
+  corpus.rag_setup:
+    title: Configure local semantic search over project documents
+    delegate_skill: sweetclaude:corpus-rag-setup
+    command_entrypoint:
+      slash_command: /sweetclaude:utils corpus-rag-setup
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: corpus.rag_setup-artifact-written
+      check: the artifact exists at the configured base_path
+      not_executable:
+        reason: no code block in this skill writes the artifact; the model writes it
+          directly, so no fixture can make the block do it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  corpus.rag_reindex:
+    title: Rebuild RAG collections from source files
+    delegate_skill: sweetclaude:corpus-rag-reindex
+    command_entrypoint:
+      slash_command: /sweetclaude:utils corpus-rag-reindex
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: corpus.rag_reindex-artifact-written
+      check: the artifact exists at the configured base_path
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+  corpus.pipeline:
+    title: Run the full document corpus pipeline
+    delegate_skill: sweetclaude:document-corpus
+    command_entrypoint:
+      slash_command: /sweetclaude:utils document-corpus
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - artifact-privacy.yaml resolves categories.product.base_path
+    - artifact path is tracked in git, so a checkout can restore it
+    postconditions:
+    - id: corpus.pipeline-artifact-written
+      check: the corpus tree is created at corpus/canonical, corpus/raw/inbox and corpus/archive
+        — outside the four configured artifact categories
+      verify:
+        kind: path_written
+        block: mkdir -p corpus/canonical corpus/raw/inbox corpus/archive
+        paths:
+        - corpus/canonical
+        - corpus/raw/inbox
+        - corpus/archive
+    rollback_support:
+      supported: true
+      command: git checkout -- <artifact-path>
+      limitations: []
+    unsupported_states:
+    - condition: artifact_privacy_manifest_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_preflight_guard_state_file.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  testing.behavioral_regression:
+    title: Score the model against the interaction-model behavioral contracts
+    delegate_skill: null
+    command_entrypoint:
+      slash_command: null
+      script: scripts/behavioral_judge.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - a live model session
+    postconditions:
+    - id: scorecard-complete
+      check: every declared contract appears on the scorecard
+      not_executable:
+        reason: the scorecard is produced by scoring a live model with
+          scripts/behavioral_judge.py, so no block can write it (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 scoring writes no project files"
+      limitations: []
+    unsupported_states:
+    - condition: no_live_model
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_behavioral_judge.py -q
+  code.feature:
+    title: Build a new feature end to end under TDD
+    delegate_skill: sweetclaude:code-feature
+    command_entrypoint:
+      slash_command: /sweetclaude:build code-feature
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - a story or issue with acceptance criteria exists
+    - tests written and RED before implementation
+    postconditions:
+    - id: tests-green
+      check: the suite passes and acceptance criteria are satisfied
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_small_story_gate.py -q
+    - python3 -m pytest tests/test_evidence_gates.py -q
+    safety_contract:
+    - plan
+    - tests-red
+    - implement
+    - tests-green
+    - review
+    - commit
+  code.issue:
+    title: Implement a tracked issue end to end
+    delegate_skill: sweetclaude:code-issue
+    command_entrypoint:
+      slash_command: /sweetclaude:build code-issue
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - the issue exists and is triaged
+    postconditions:
+    - id: issue-satisfied
+      check: acceptance criteria met and tests green
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_small_story_gate.py -q
+    - python3 -m pytest tests/test_evidence_gates.py -q
+  code.debt:
+    title: Refactor without changing behavior
+    delegate_skill: sweetclaude:code-debt
+    command_entrypoint:
+      slash_command: /sweetclaude:maintain code-debt
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - existing behavior locked by tests before refactoring begins
+    postconditions:
+    - id: behavior-unchanged
+      check: all pre-existing tests still pass unmodified
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-1-structural
+  code.review:
+    title: Code, security and compliance review
+    delegate_skill: sweetclaude:code-review
+    command_entrypoint:
+      slash_command: /sweetclaude:build code-review
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - a diff or branch to review
+    postconditions:
+    - id: findings-reported
+      check: findings reported without modifying the tree
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 writes no project files"
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-1-structural
+  code.tdd:
+    title: Run the TDD pipeline at the selected level
+    delegate_skill: sweetclaude:code-tdd
+    command_entrypoint:
+      slash_command: /sweetclaude:build code-tdd
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - a TDD level selected
+    - tests confirmed RED before implementation
+    postconditions:
+    - id: red-then-green
+      check: tests moved from RED to GREEN without test edits
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_small_story_gate.py -q
+    - python3 -m pytest tests/test_evidence_gates.py -q
+  code.testing:
+    title: Run suite, mutation testing, security review or PR pre-check
+    delegate_skill: sweetclaude:code-testing
+    command_entrypoint:
+      slash_command: /sweetclaude:build code-testing
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - a test suite exists
+    postconditions:
+    - id: results-reported
+      check: results reported; no source modified
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 writes no project files"
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-1-structural
+  code.verify:
+    title: Produce a completion evidence receipt before closing work
+    delegate_skill: sweetclaude:code-verify
+    command_entrypoint:
+      slash_command: /sweetclaude:build code-verify
+      script: scripts/evidence.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - the work item is in review or active
+    postconditions:
+    - id: receipt-valid
+      check: evidence.py validate accepts the receipt for the subject id
+    rollback_support:
+      supported: true
+      command: delete the generated receipt under .sweetclaude/
+      limitations: []
+    unsupported_states:
+    - condition: tests_failing
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_evidence.py -q
+    - python3 -m pytest tests/test_evidence_gates.py -q
+  code.small_story:
+    title: Bounded evidence-gated small-story workflow
+    delegate_skill: sweetclaude:small-story
+    command_entrypoint:
+      slash_command: /sweetclaude:build small-story
+      script: scripts/small_story_controller.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - on the trunk branch with a clean tree
+    - no other workflow active
+    postconditions:
+    - id: workflow-complete
+      check: workflow state reaches complete with a valid receipt
+    rollback_support:
+      supported: true
+      command: git checkout <trunk> && git branch -D <story-branch>
+      limitations:
+      - committed work on the story branch is discarded
+    unsupported_states:
+    - condition: inflight_workflow
+      behavior: block
+    - condition: dirty_tree
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_small_story_gate.py -q
+    - python3 -m pytest tests/test_init_preconditions.py -q
+  code.large_story:
+    title: Bounded evidence-gated large-story workflow
+    delegate_skill: sweetclaude:large-story
+    command_entrypoint:
+      slash_command: /sweetclaude:build large-story
+      script: scripts/large_story_controller.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - on the trunk branch with a clean tree
+    - no other workflow active
+    postconditions:
+    - id: workflow-complete
+      check: workflow state reaches complete with a valid receipt
+    rollback_support:
+      supported: true
+      command: git checkout <trunk> && git branch -D <story-branch>
+      limitations:
+      - committed work on the story branch is discarded
+    unsupported_states:
+    - condition: inflight_workflow
+      behavior: block
+    - condition: dirty_tree
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_large_story_gate.py -q
+    - python3 -m pytest tests/test_large_story_controller.py -q
+  code.orchestrator:
+    title: Execute tracked workflow steps via subagents
+    delegate_skill: sweetclaude:orchestrator
+    command_entrypoint:
+      slash_command: /sweetclaude:build orchestrator
+      script: scripts/orchestrator_loop.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - a workflow state file exists
+    postconditions:
+    - id: steps-recorded
+      check: each completed step is recorded before the next begins
+    rollback_support:
+      supported: true
+      command: restore the workflow state file from its prior revision
+      limitations:
+      - side effects of completed steps are not undone
+    unsupported_states:
+    - condition: workflow_error_state
+      behavior: escalate
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test-orchestrator-checks.py -q
+  code.hotfix:
+    title: Minimal production patch with mandatory post-mortem
+    delegate_skill: sweetclaude:hotfix
+    command_entrypoint:
+      slash_command: /sweetclaude:maintain hotfix
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - production impact confirmed
+    - scope minimised to the breaking change
+    postconditions:
+    - id: postmortem-spawned
+      check: a post-mortem work item is created
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  code.security_patch:
+    title: Vulnerability fix with mandatory security review
+    delegate_skill: sweetclaude:security-patch
+    command_entrypoint:
+      slash_command: /sweetclaude:maintain security-patch
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - vulnerability identified and blast radius assessed
+    postconditions:
+    - id: security-review
+      check: independent security review completed before ship
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: review_unavailable
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  code.rollback_revert:
+    title: Roll back or revert a deployment
+    delegate_skill: sweetclaude:rollback-revert
+    command_entrypoint:
+      slash_command: /sweetclaude:maintain rollback-revert
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: destructive
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - the causing deploy identified
+    - data impact assessed
+    postconditions:
+    - id: production-healthy
+      check: monitoring confirms recovery
+      not_executable:
+        reason: a production observation. No test in this repository can assert that
+          monitoring confirms recovery.
+        route: none
+    - id: postmortem-spawned
+      check: a post-mortem work item is created
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: re-deploy the reverted change
+      limitations:
+      - data written between deploy and revert is not restored
+    unsupported_states:
+    - condition: data_inconsistency_risk
+      behavior: escalate
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-3-behavioral
+  code.incident:
+    title: Reactive production incident triage
+    delegate_skill: sweetclaude:something-broke
+    command_entrypoint:
+      slash_command: /sweetclaude:maintain something-broke
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - a reported production symptom
+    postconditions:
+    - id: severity-classified
+      check: severity classified before fix work begins
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-3-behavioral
+  code.postmortem:
+    title: Author a post-mortem with timeline and action items
+    delegate_skill: sweetclaude:postmortem
+    command_entrypoint:
+      slash_command: /sweetclaude:maintain postmortem
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - an incident or hotfix to analyse
+    postconditions:
+    - id: action-items-filed
+      check: action items land in the backlog with priority
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  code.john_wick:
+    title: Autonomous resumable multi-session SDLC pipeline
+    delegate_skill: sweetclaude:john-wick
+    command_entrypoint:
+      slash_command: /sweetclaude:build john-wick
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - discovery artifacts present
+    - explicit acknowledgement typed by the user
+    postconditions:
+    - id: state-write-discipline
+      check: state records the next step before it begins
+    rollback_support:
+      supported: true
+      command: git checkout <trunk> && git branch -D <run-branch>
+      limitations:
+      - an interrupted run resumes rather than unwinding
+    unsupported_states:
+    - condition: prerequisites_unmet
+      behavior: block
+    - condition: run_in_error_state
+      behavior: escalate
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-1-structural
+  code.ultraplan:
+    title: Produce a design-phase architecture plan via ultraplan
+    delegate_skill: sweetclaude:ultraplan
+    command_entrypoint:
+      slash_command: /sweetclaude:design ultraplan
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - phase artifacts available to summarise
+    postconditions:
+    - id: plan-ingested
+      check: the plan lands as the DESIGN phase artifact
+      not_executable:
+        reason: describes model conduct rather than a file effect, so it is judged
+          from a transcript rather than executed (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-3-behavioral
+  project.issues:
+    title: Create, view, update and close project issues
+    delegate_skill: sweetclaude:project-issues
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-issues
+      script: scripts/status.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - issue store initialised
+    postconditions:
+    - id: status-audited
+      check: every status change is written through status.py
+    rollback_support:
+      supported: true
+      command: python3 scripts/status.py set --file <item> --status <previous>
+      limitations:
+      - audit log retains the intermediate transition
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_status.py -q
+    - python3 -m pytest tests/test_closeout_state.py -q
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  project.backlog:
+    title: View and manage the unscheduled issue backlog
+    delegate_skill: sweetclaude:project-backlog
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-backlog
+      script: scripts/cache.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - issue store initialised
+    postconditions:
+    - id: read-only
+      check: listing does not modify item files
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 writes no project files"
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  project.backlog_triage:
+    title: Structured backlog grooming session
+    delegate_skill: sweetclaude:project-backlog-triage
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-backlog-triage
+      script: scripts/status.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - per-item approval before any status change
+    postconditions:
+    - id: no-bulk-close
+      check: no item is closed without explicit approval
+    rollback_support:
+      supported: true
+      command: python3 scripts/status.py set --file <item> --status <previous>
+      limitations:
+      - audit log retains the intermediate transition
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_status.py -q
+    - python3 -m pytest tests/test_closeout_state.py -q
+  project.epics:
+    title: Manage epics and objectives
+    delegate_skill: sweetclaude:epics
+    command_entrypoint:
+      slash_command: /sweetclaude:plan epics
+      script: scripts/status.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - issue store initialised
+    postconditions:
+    - id: cascade-offered
+      check: a status change with dependents offers the cascade
+    rollback_support:
+      supported: true
+      command: python3 scripts/status.py set --file <item> --status <previous>
+      limitations:
+      - audit log retains the intermediate transition
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_status.py -q
+    - python3 -m pytest tests/test_closeout_state.py -q
+  project.epic_design:
+    title: Produce an ordered story list for an epic
+    delegate_skill: sweetclaude:epic-design
+    command_entrypoint:
+      slash_command: /sweetclaude:plan epic-design
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - the epic exists
+    postconditions:
+    - id: stories-created
+      check: stories are created and linked to the epic
+      not_executable:
+        reason: no code block in this skill produces this state; the model writes it
+          (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  project.sprints:
+    title: Sprint planning, activation, board and close
+    delegate_skill: sweetclaude:project-sprints
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-sprints
+      script: scripts/status.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - issues available to schedule
+    postconditions:
+    - id: sprint-recorded
+      check: sprint assignment is recorded on each item
+    rollback_support:
+      supported: true
+      command: python3 scripts/status.py set --file <item> --status <previous>
+      limitations:
+      - audit log retains the intermediate transition
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_status.py -q
+    - python3 -m pytest tests/test_closeout_state.py -q
+  project.goals:
+    title: Manage binary business goals
+    delegate_skill: sweetclaude:project-goals
+    command_entrypoint:
+      slash_command: /sweetclaude:plan project-goals
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - project is configured
+    postconditions:
+    - id: goals-written
+      check: goals persist to the project store
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create milestone '{
+        category: product
+        artifact_glob: roadmap/milestones/MS-*.md
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    verification_tier: tier-2-executable
+  project.scope:
+    title: Define and maintain project scope
+    delegate_skill: sweetclaude:project-scope
+    command_entrypoint:
+      slash_command: /sweetclaude:plan project-scope
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - project is configured
+    postconditions:
+    - id: scope-written
+      check: scope changes persist and are logged
+      not_executable:
+        reason: no code block in this skill produces this state; the model writes it
+          (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-3-behavioral
+  project.themes:
+    title: Manage domain-grouping labels on stories
+    delegate_skill: sweetclaude:project-themes
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-themes
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - issue store initialised
+    postconditions:
+    - id: themes-applied
+      check: a theme record is created in the product store. Applying the label to the
+        referenced issues is model-driven and is not exercised by this check
+      verify:
+        kind: artifact_written
+        block: sc_artifact_create theme '{
+        category: product
+        artifact_glob: themes/TH-*.md
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  project.mode:
+    title: Assess and shift the project mode
+    delegate_skill: sweetclaude:project-mode
+    command_entrypoint:
+      slash_command: /sweetclaude:configure project-mode
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - a snapshot is taken before a mode shift
+    postconditions:
+    - id: gates-recompiled
+      check: effective-gates.yaml is regenerated for the new mode
+      verify:
+        kind: path_written
+        block: bash ${CLAUDE_PLUGIN_ROOT}/scripts/generate-effective-gates.sh
+        paths:
+        - .sweetclaude/state/effective-gates.yaml
+    rollback_support:
+      supported: true
+      command: restore state from the mode-shift snapshot directory
+      limitations: []
+    unsupported_states:
+    - condition: active_sprints_open
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_canonical_state_reads.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  project.assess_shape:
+    title: Recommend and configure a project mode
+    delegate_skill: sweetclaude:project-assess-shape
+    command_entrypoint:
+      slash_command: /sweetclaude:configure project-assess-shape
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - project is configured
+    postconditions:
+    - id: mode-written
+      check: effective-gates.yaml is regenerated for the assessed mode. The mode value
+        itself is written by the caller, not by this skill's code — its only
+        block is generate-effective-gates.sh
+      verify:
+        kind: path_written
+        block: bash ${CLAUDE_PLUGIN_ROOT}/scripts/generate-effective-gates.sh
+        paths:
+        - .sweetclaude/state/effective-gates.yaml
+    rollback_support:
+      supported: true
+      command: /sweetclaude:project-mode shift <previous>
+      limitations: []
+    unsupported_states:
+    - condition: mode_already_set
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_canonical_state_reads.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  project.gh_import:
+    title: Import open GitHub issues into the local store
+    delegate_skill: sweetclaude:project-gh-import-issues
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-gh-import-issues
+      script: scripts/cache.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - gh CLI authenticated
+    postconditions:
+    - id: no-duplicates
+      check: existing local items are not duplicated
+    rollback_support:
+      supported: true
+      command: delete the imported item files and rebuild the cache
+      limitations: []
+    unsupported_states:
+    - condition: gh_unauthenticated
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  project.gh_sync:
+    title: Bidirectional status sync with GitHub issues
+    delegate_skill: sweetclaude:project-gh-sync-issues
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-gh-sync-issues
+      script: scripts/status.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - gh CLI authenticated
+    - local and remote item mapping resolved
+    postconditions:
+    - id: status-audited
+      check: local status changes route through status.py
+    rollback_support:
+      supported: true
+      command: python3 scripts/status.py set --file <item> --status <previous>
+      limitations:
+      - audit log retains the intermediate transition
+    unsupported_states:
+    - condition: gh_unauthenticated
+      behavior: block
+    - condition: conflicting_status
+      behavior: escalate
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_status.py -q
+    - python3 -m pytest tests/test_closeout_state.py -q
+  project.retro:
+    title: Review and maintain the improvement register
+    delegate_skill: sweetclaude:retro
+    command_entrypoint:
+      slash_command: /sweetclaude:configure retro
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - project is configured
+    postconditions:
+    - id: learnings-recorded
+      check: entries persist to the improvement register
+      not_executable:
+        reason: no code block in this skill produces this state; the model writes it
+          (ISSUE-299)
+        route: no-instrument
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    verification_tier: tier-3-behavioral
+  project.course_correction:
+    title: Document a pivot and triage in-flight work
+    delegate_skill: sweetclaude:course-correction
+    command_entrypoint:
+      slash_command: /sweetclaude:plan course-correction
+      script: scripts/cache.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - the triggering signal documented
+    - each in-flight item tagged individually
+    postconditions:
+    - id: backlog-clean
+      check: no zombie items remain from the old direction
+    rollback_support:
+      supported: true
+      command: git revert <commit> or git checkout -- <path>
+      limitations: []
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_cache_taxonomy.py -q
+  quality.artifact_lint:
+    title: Check a produced artifact against its mechanical quality criteria
+    delegate_skill: null
+    command_entrypoint:
+      slash_command: null
+      script: scripts/artifact_lint.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - config/artifact-criteria.yaml defines the artifact type
+    postconditions:
+    - id: binary-per-criterion
+      check: each criterion reports pass or fail by name, with no composite score
+    - id: no-silent-skips
+      check: judgment and blocked criteria are reported, not omitted
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 reads only"
+      limitations: []
+    unsupported_states:
+    - condition: unknown_artifact_type
+      behavior: block
+    - condition: criterion_definition_missing
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.5.3
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_artifact_quality.py -q
+  quality.rubric_judge:
+    title: Score the semantic artifact criteria a linter cannot reach
+    delegate_skill: null
+    command_entrypoint:
+      slash_command: null
+      script: scripts/artifact_judge.py
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - config/artifact-rubrics.yaml defines a rubric for the criterion
+    - the judge has been measured against the falsification corpus and discriminates
+    postconditions:
+    - id: citation-required
+      check: a verdict without a verbatim citation is discarded, not counted
+      not_executable:
+        reason: the entrypoint scripts/artifact_judge.py and its suite
+          tests/test_artifact_judge.py exist only on
+          park/EP-004-ledger-and-quality; nothing on main can run this
+        route: parked
+    - id: one-criterion-at-a-time
+      check: each verdict answers exactly one criterion
+      not_executable:
+        reason: the entrypoint scripts/artifact_judge.py and its suite
+          tests/test_artifact_judge.py exist only on
+          park/EP-004-ledger-and-quality; nothing on main can run this
+        route: parked
+    - id: discrimination-proven
+      check: discriminate reports true for the configured backend
+      not_executable:
+        reason: the entrypoint scripts/artifact_judge.py and its suite
+          tests/test_artifact_judge.py exist only on
+          park/EP-004-ledger-and-quality; nothing on main can run this
+        route: parked
+    rollback_support:
+      supported: true
+      command: "not applicable \u2014 reads only"
+      limitations: []
+    unsupported_states:
+    - condition: backend_unavailable
+      behavior: block
+    - condition: judge_does_not_discriminate
+      behavior: block
+    version_metadata:
+      introduced_in: 4.5.3
+      deprecated_in: null
+    verification_commands:
+    - python3 -m pytest tests/test_artifact_judge.py -q
+    - python3 scripts/artifact_judge.py discriminate --backend stub
+    verification_tier: tier-3-behavioral
+  config.audit_redirect:
+    title: 'Redirect: claude-config-audit sends the user to doctor'
+    delegate_skill: sweetclaude:claude-config-audit
+    command_entrypoint:
+      slash_command: /sweetclaude:configure claude-config-audit
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions: []
+    postconditions:
+    - id: target-resolves
+      check: sweetclaude:doctor exists as a skill
+    unsupported_states:
+    - condition: target_removed
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: 4.0.0
+    verification_commands:
+    - python3 scripts/checks/redirect_targets.py
+  fix.sweetclaude_redirect:
+    title: 'Redirect: fix-sweetclaude sends the user to doctor'
+    delegate_skill: sweetclaude:fix-sweetclaude
+    command_entrypoint:
+      slash_command: /sweetclaude:configure fix-sweetclaude
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions: []
+    postconditions:
+    - id: target-resolves
+      check: sweetclaude:doctor exists as a skill
+    unsupported_states:
+    - condition: target_removed
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: 4.0.0
+    verification_commands:
+    - python3 scripts/checks/redirect_targets.py
+  hooks.repair_redirect:
+    title: 'Redirect: hook-repair sends the user to doctor'
+    delegate_skill: sweetclaude:hook-repair
+    command_entrypoint:
+      slash_command: /sweetclaude:configure hook-repair
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions: []
+    postconditions:
+    - id: target-resolves
+      check: sweetclaude:doctor exists as a skill
+    unsupported_states:
+    - condition: target_removed
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: 4.0.0
+    verification_commands:
+    - python3 scripts/checks/redirect_targets.py
+  migrate.diagnose_redirect:
+    title: 'Redirect: migrate-diagnose sends the user to doctor'
+    delegate_skill: sweetclaude:migrate-diagnose
+    command_entrypoint:
+      slash_command: /sweetclaude:configure migrate-diagnose
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions: []
+    postconditions:
+    - id: target-resolves
+      check: sweetclaude:doctor exists as a skill
+    unsupported_states:
+    - condition: target_removed
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: 4.0.0
+    verification_commands:
+    - python3 scripts/checks/redirect_targets.py
+  project.epics_redirect:
+    title: 'Redirect: project-epics sends the user to epics'
+    delegate_skill: sweetclaude:project-epics
+    command_entrypoint:
+      slash_command: /sweetclaude:build project-epics
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions: []
+    postconditions:
+    - id: target-resolves
+      check: sweetclaude:epics exists as a skill
+    unsupported_states:
+    - condition: target_removed
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: 4.0.0
+    verification_commands:
+    - python3 scripts/checks/redirect_targets.py
+  session.bootstrap:
+    title: 'Session startup: pre-flight, drift and update offers, routing'
+    delegate_skill: sweetclaude:bootstrap
+    command_entrypoint:
+      slash_command: null
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions: []
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_beta_channel_retirement.py -q
+  session.master:
+    title: Phase router and session entry point
+    delegate_skill: sweetclaude:master
+    command_entrypoint:
+      slash_command: null
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-1-structural
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+  session.route:
+    title: Map natural-language input to the right internal skill
+    delegate_skill: sweetclaude:_route
+    command_entrypoint:
+      slash_command: null
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-1-structural
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+  session.help:
+    title: Help and skill discovery
+    delegate_skill: sweetclaude:help
+    command_entrypoint:
+      slash_command: /sweetclaude:help
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions: []
+    postconditions:
+    - id: writes-only-on-request
+      check: the default help path writes nothing; the welcome-skip flag and a learning
+        removal are written only when the user asks for them
+      verify:
+        kind: state_key_written
+        block: d['skip_help_welcome'] = True
+        file: .sweetclaude/state/sweetclaude.yaml
+        key_path:
+        - skip_help_welcome
+        value: true
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    rollback_support:
+      supported: true
+      command: remove skip_help_welcome from sweetclaude.yaml, or re-add the removed
+        learning
+      limitations:
+      - a removed learning is not recoverable from the state file itself
+  session.find_skill:
+    title: Find and start the right skill for a piece of work
+    delegate_skill: sweetclaude:find-skill
+    command_entrypoint:
+      slash_command: null
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions: []
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_go_find_skill_routing.py -q
+  session.go:
+    title: Assess what to work on next and propose it
+    delegate_skill: sweetclaude:go
+    command_entrypoint:
+      slash_command: /sweetclaude:go
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_go_find_skill_routing.py -q
+  report.status:
+    title: Orient to the current project
+    delegate_skill: sweetclaude:status
+    command_entrypoint:
+      slash_command: /sweetclaude:status
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_reporting_skills_taxonomy.py -q
+  report.recap:
+    title: 'Where we are: phase, active item, recent commits, checkpoint'
+    delegate_skill: sweetclaude:recap
+    command_entrypoint:
+      slash_command: /sweetclaude:utils recap
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_reporting_skills_taxonomy.py -q
+  report.big_picture:
+    title: The full roadmap pipeline at a glance
+    delegate_skill: sweetclaude:big-picture
+    command_entrypoint:
+      slash_command: /sweetclaude:utils big-picture
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_reporting_skills_taxonomy.py -q
+  report.next_steps:
+    title: Walk the pipeline step by step
+    delegate_skill: sweetclaude:next-steps
+    command_entrypoint:
+      slash_command: /sweetclaude:utils next-steps
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_reporting_skills_taxonomy.py -q
+  features.configure:
+    title: Show and configure optional features
+    delegate_skill: sweetclaude:_features
+    command_entrypoint:
+      slash_command: /sweetclaude:configure _features
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: feature-decisions-written
+      check: the chosen feature statuses persist to sweetclaude.yaml
+      verify:
+        kind: content_changed
+        block: features[key].update(
+        paths:
+        - .sweetclaude/state/sweetclaude.yaml
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    rollback_support:
+      supported: true
+      command: re-run /sweetclaude:_features and restore the previous statuses
+      limitations:
+      - onboarding side effects of a newly-enabled feature are not unwound by flipping
+        its status back
+  health.scan:
+    title: Consistency scan and version check
+    delegate_skill: sweetclaude:_health
+    command_entrypoint:
+      slash_command: /sweetclaude:configure _health
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/state/sweetclaude.yaml
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_fresh_project_onboarding.py -q
+    rollback_support:
+      supported: true
+      command: remove or restore .sweetclaude/state/sweetclaude.yaml
+      limitations:
+      - state written before the failure point is not unwound
+  project.deactivate:
+    title: Deactivate SweetClaude for this project
+    delegate_skill: sweetclaude:off
+    command_entrypoint:
+      slash_command: /sweetclaude:configure off
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/disabled
+      verify:
+        kind: path_written
+        block: touch .sweetclaude/disabled
+        paths:
+        - .sweetclaude/disabled
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    rollback_support:
+      supported: true
+      command: remove or restore .sweetclaude/disabled
+      limitations:
+      - state written before the failure point is not unwound
+  project.hibernate:
+    title: Hibernate or wake a project
+    delegate_skill: sweetclaude:hibernate
+    command_entrypoint:
+      slash_command: /sweetclaude:configure hibernate
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/state/
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-1-structural
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    rollback_support:
+      supported: true
+      command: remove or restore .sweetclaude/state/
+      limitations:
+      - state written before the failure point is not unwound
+  guardian.enable:
+    title: Enable the Protocol Guardian
+    delegate_skill: sweetclaude:guardian-on
+    command_entrypoint:
+      slash_command: /sweetclaude:configure guardian-on
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/state/guardian-enabled
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_hook_behavior.py -q
+    rollback_support:
+      supported: true
+      command: remove or restore .sweetclaude/state/guardian-enabled
+      limitations:
+      - state written before the failure point is not unwound
+  guardian.disable:
+    title: Disable the Protocol Guardian
+    delegate_skill: sweetclaude:guardian-off
+    command_entrypoint:
+      slash_command: /sweetclaude:configure guardian-off
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/state/guardian-enabled
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_hook_behavior.py -q
+    rollback_support:
+      supported: true
+      command: remove or restore .sweetclaude/state/guardian-enabled
+      limitations:
+      - state written before the failure point is not unwound
+  install.feature_setup:
+    title: Deploy the local repo to installed locations and rebuild the cache
+    delegate_skill: sweetclaude:feature-setup
+    command_entrypoint:
+      slash_command: /sweetclaude:configure feature-setup
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions: []
+    postconditions:
+    - id: reports-or-writes
+      check: the project cache is created and rebuilt at .sweetclaude/cache. The ~/.claude
+        half runs sync-to-installed.sh and is deliberately not exercised here
+      verify:
+        kind: path_written
+        block: mkdir -p .sweetclaude/cache
+        paths:
+        - .sweetclaude/cache
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-1-structural
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+    rollback_support:
+      supported: true
+      command: remove or restore ~/.claude and .sweetclaude/cache
+      limitations:
+      - state written before the failure point is not unwound
+  migrate.orchestrate:
+    title: 'Migration orchestrator: snapshot, recovery menus, end-of-session decision'
+    delegate_skill: sweetclaude:_migrate
+    command_entrypoint:
+      slash_command: /sweetclaude:configure _migrate
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/state/
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_migration_helpers.py -q
+    rollback_support:
+      supported: true
+      command: remove or restore .sweetclaude/state/
+      limitations:
+      - state written before the failure point is not unwound
+  report.dashboard:
+    title: 'Local web dashboard: roadmap, releases, epics, backlog, dependencies'
+    delegate_skill: sweetclaude:dashboard
+    command_entrypoint:
+      slash_command: /sweetclaude:utils dashboard
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: no source artifact is modified. The derived cache at
+        .sweetclaude/cache/roadmap.db is rebuilt, because get_conn() creates it
+        on any read; it is gitignored and reconstructed from the work-item files.
+        The dashboard-launch and browser-open blocks are not exercised
+      verify:
+        kind: no_mutation
+        blocks:
+        - cache.py --project-dir . --rebuild
+        ignore:
+        - .sweetclaude/cache/
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-1-structural
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_capability_postconditions.py -q
+  code.deploy_ship:
+    title: 'SHIP phase: deploy, smoke test, and close out the work item'
+    delegate_skill: sweetclaude:deploy-ship
+    command_entrypoint:
+      slash_command: /sweetclaude:build deploy-ship
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/state/ and the work item file
+      not_executable:
+        reason: no code block in this skill produces this state; the model writes it
+          (ISSUE-299)
+        route: no-instrument
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-3-behavioral
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    rollback_support:
+      supported: true
+      command: restore .sweetclaude/state/ and the work item file
+      limitations:
+      - state written before the failure point is not unwound
+  code.john_wick_checkin:
+    title: Internal phase check-in subagent for the John Wick workflow
+    delegate_skill: sweetclaude:john-wick-checkin
+    command_entrypoint:
+      slash_command: /sweetclaude:build john-wick-checkin
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: read_only
+    mutates_project: false
+    requires_approval: false
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: reports without mutating project state
+    unsupported_states:
+    - condition: not_configured
+      behavior: diagnose_only
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-1-structural
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+  metrics.usage:
+    title: Toggle and view local usage tracking
+    delegate_skill: sweetclaude:usage
+    command_entrypoint:
+      slash_command: /sweetclaude:configure usage
+      script: null
+      module: null
+    supports_project_shapes:
+    - current_layout
+    mutation_class: planned_write
+    mutates_project: true
+    requires_approval: true
+    required_preconditions:
+    - sweetclaude configured
+    postconditions:
+    - id: reports-or-writes
+      check: writes .sweetclaude/state/usage/
+    unsupported_states:
+    - condition: not_configured
+      behavior: block
+    version_metadata:
+      introduced_in: 4.0.0
+      deprecated_in: null
+    verification_tier: tier-2-executable
+    verification_commands:
+    - python3 -m pytest tests/test_skill_contracts.py -q
+    - python3 -m pytest tests/test_usage_outcomes.py -q
+    rollback_support:
+      supported: true
+      command: restore .sweetclaude/state/usage/
+      limitations:
+      - state written before the failure point is not unwound
+project_shapes:
+  recovery_required:
+    guard_status: run-recover
+    migrate_allowed: false
+    message: This project is in a recoverable SweetClaude migration/update state. Run /sweetclaude:recover
+      before any taxonomy migration.
+    recovery_route: stabilize-without-migration
+    recovery_capability: recover.stabilize_without_migration
+  manual_escalation:
+    guard_status: manual-review
+    migrate_allowed: false
+    message: This project needs manual SweetClaude recovery review before migration or other maintenance
+      commands.
+    doctor_capability: doctor.manual_review
+  accepted_legacy_taxonomy:
+    guard_status: compatibility-mode
+    migrate_allowed: true
+    message: This project has a legacy taxonomy layout. Run /sweetclaude:migrate to convert to v4, or
+      /sweetclaude:recover to check graduation eligibility.
+    migration_capability: migrate.typed_legacy_backlog
+    graduation_capability: recover.graduate_from_compatibility
+  graduation_candidate:
+    guard_status: graduation-available
+    migrate_allowed: false
+    message: This project is v4-compliant and can graduate from compatibility mode.
+    graduation_capability: recover.graduate_from_compatibility
+  graduation_blocked:
+    guard_status: graduation-blocked
+    migrate_allowed: false
+    message: This project could graduate from compatibility mode, but validation blockers must be fixed
+      first. Each blocker carries its resolution.
+    blocker_fix_capability: doctor.fix_graduation_blockers
+    graduation_capability: recover.graduate_from_compatibility
+  flat_bl_backlog:
+    migration: flat_bl_to_issue
+    guard_status: migration-may-be-needed
+    migrate_allowed: true
+    message: Old-format work items were found and no recovery-only state was detected. Review /sweetclaude:migrate
+      before executing it.
+    migration_capability: migrate.flat_bl_to_issue
+  typed_legacy_backlog:
+    guard_status: supported-migration-available
+    migrate_allowed: true
+    migration_capability: migrate.typed_legacy_backlog
+    message: This project has a typed legacy backlog layout. Run /sweetclaude:migrate to migrate to the
+      unified ISSUE-NNN taxonomy.
+  missing_product_base:
+    guard_status: missing-product-base
+    migrate_allowed: false
+    message: SweetClaude product artifacts were not found. Run /sweetclaude:doctor or /sweetclaude:setup
+      instead of migration.
+    doctor_capability: doctor.manual_review
+  current_layout:
+    guard_status: ok
+    migrate_allowed: false
+    message: No SweetClaude migration or recovery guard is currently active.
